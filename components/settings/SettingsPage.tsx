@@ -5,6 +5,7 @@ import { importData, downloadFromServer } from '../../services/dataImportService
 import StorageDashboard from './StorageDashboard';
 import BackupSettings from './BackupSettings';
 import SessionManagement from './SessionManagement';
+import LevelFeesSettings from './LevelFeesSettings';
 
 interface SettingsPageProps {
     prospectStore: ProspectDataStore & StudentDataStore & ClassDataStore & PaymentDataStore & ExpenditureDataStore;
@@ -109,6 +110,9 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ prospectStore }) => {
                     {message.text}
                 </div>
             )}
+
+            {/* Level Fees */}
+            <LevelFeesSettings dataStore={prospectStore} />
 
             {/* Export/Import Section */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">

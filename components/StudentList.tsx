@@ -7,15 +7,19 @@ interface StudentListProps {
   payments: Payment[];
   onEdit: (student: Student) => void;
   onEnroll: (student: Student) => void;
+  onDelete: (student: Student) => void;
+  onAdvance: (student: Student) => void;
 }
 
-const StudentList: React.FC<StudentListProps> = ({ students, payments, onEdit, onEnroll }) => {
+const StudentList: React.FC<StudentListProps> = ({ students, payments, onEdit, onEnroll, onDelete, onAdvance }) => {
   return (
     <StudentsTable
       students={students}
       payments={payments}
       onEdit={onEdit}
       onEnroll={onEnroll}
+      onDelete={onDelete}
+      onAdvance={onAdvance}
     />
   );
 };

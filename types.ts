@@ -142,6 +142,19 @@ export const commonEuropeanLanguages = [
 
 export type ActiveView = 'dashboard' | 'prospects' | 'clients' | 'classes' | 'conversions' | 'finance' | 'settings' | 'communications';
 
+export interface AdvancementLogEntry {
+  from: string;
+  to: string;
+  fee: number;
+  advancedAt: string;
+  advancedBy: string;
+}
+
+export interface LevelFee {
+  level: string;
+  fee: number;
+}
+
 export interface Prospect {
   id: string;
   prospectName: string;
@@ -215,6 +228,8 @@ export interface Student {
   fees: number;
   languageOfStudy?: string; // Language the student is learning
   serviceInterestedIn?: ServiceType; // For converted prospect clients
+  currentLevel?: string; // Current class level e.g. 'A1.1'
+  advancementLog?: AdvancementLogEntry[]; // History of level advancements
 
   // User attribution
   createdBy: string;

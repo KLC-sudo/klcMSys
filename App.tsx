@@ -118,6 +118,7 @@ const App: React.FC = () => {
   const [allClasses, setAllClasses] = useState<Class[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [deletingClient, setDeletingClient] = useState<Student | null>(null);
 
 
   const fetchProspects = useCallback(async () => {
@@ -339,6 +340,42 @@ const App: React.FC = () => {
       setError("Could not update student record.");
     }
   }, [editingStudent, prospectStore]);
+
+  const handleDeleteClient = useCallback((client: Student) => {
+    setDeletingClient(client);
+  }, []);
+
+  const handleConfirmDeleteClient = useCallback(async () => {
+    if (!deletingClient) return;
+    const isStudent = deletingClient.studentId.startsWith('STU-');
+    try {
+      if (isStudent) {
+        await prospectStore.deleteStudent(deletingClient.id);
+      } else {
+        await prospectStore.deleteProspect(deletingClient.id);
+      }
+      setDeletingClient(null);
+      setStudentDataVersion(v => v + 1);
+    } catch (err) {
+      console.error('Failed to delete client:', err);
+      setError('Failed to delete client.');
+    }
+  }, [deletingClient, prospectStore]);
+
+  const handleAdvanceStudent = useCallback(async (student: Student) => {
+    const response = await fetch(`/api/students/${student.id}/advance`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+      }
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ message: 'Failed to advance student' }));
+      throw new Error(err.message || 'Failed to advance student');
+    }
+    setStudentDataVersion(v => v + 1);
+  }, []);
 
   const handleAddClass = useCallback(async (classData: ClassFormData) => {
     try {
@@ -600,6 +637,8 @@ const App: React.FC = () => {
               dataStore={prospectStore}
               onEditStudent={handleStartEditStudent}
               onEnrollStudent={handleStartEnrollment}
+              onDeleteStudent={handleDeleteClient}
+              onAdvanceStudent={handleAdvanceStudent}
               dataVersion={studentDataVersion}
             />
           )}
@@ -641,6 +680,43 @@ const App: React.FC = () => {
                 submitButtonText="Save Changes"
                 isEditing={true}
               />
+            )}
+          </Modal>
+
+          <Modal
+            isOpen={!!deletingClient}
+            onClose={() => setDeletingClient(null)}
+            title="Delete Client"
+          >
+            {deletingClient && (
+              <div className="text-center p-4">
+                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                  <svg className="h-6 w-6 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                  </svg>
+                </div>
+                <div className="mb-6">
+                  <p className="text-sm text-gray-500">
+                    Are you sure you want to delete <strong className="font-semibold text-gray-900">{deletingClient.name}</strong>? This action cannot be undone.
+                  </p>
+                </div>
+                <div className="flex justify-center space-x-4">
+                  <button
+                    type="button"
+                    onClick={() => setDeletingClient(null)}
+                    className="font-semibold text-slate-600 hover:text-slate-800 transition-colors px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-100"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmDeleteClient}
+                    className="bg-red-600 text-white font-bold py-2 px-6 rounded-lg shadow-md hover:bg-red-700"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
             )}
           </Modal>
 

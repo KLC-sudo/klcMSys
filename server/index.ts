@@ -555,6 +555,117 @@ app.post('/api/students', authenticateToken, async (req: AuthRequest, res: Respo
     }
 });
 
+app.put('/api/students/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    const { name, email, phone, registrationDate, dateOfBirth, nationality, occupation, address, motherTongue, howHeardAboutUs, howHeardAboutUsOther, languageOfStudy, fees, currentLevel } = req.body;
+    try {
+        const result = await query(
+            `UPDATE students SET name=$1, email=$2, phone=$3, registration_date=$4, date_of_birth=$5, nationality=$6, occupation=$7, address=$8, mother_tongue=$9, how_heard_about_us=$10, how_heard_about_us_other=$11, language_of_study=$12, fees=$13, current_level=$14, modified_by=$15, modified_at=CURRENT_TIMESTAMP WHERE id=$16 RETURNING *`,
+            [name, email, phone, registrationDate, dateOfBirth, nationality, occupation, address, motherTongue, howHeardAboutUs, howHeardAboutUsOther, languageOfStudy, fees, currentLevel || null, req.user.id, id]
+        );
+        if (result.rows.length === 0) return res.status(404).json({ message: 'Student not found' });
+        res.json(toCamel(result.rows[0]));
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Failed to update student' });
+    }
+});
+
+app.delete('/api/students/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    try {
+        await query('DELETE FROM students WHERE id = $1', [id]);
+        res.status(204).send();
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Failed to delete student' });
+    }
+});
+
+// --- Level Fees Routes ---
+
+app.get('/api/level-fees', authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+        const result = await query('SELECT level, fee FROM level_fees ORDER BY id ASC');
+        res.json(toCamel(result.rows));
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Failed to fetch level fees' });
+    }
+});
+
+app.put('/api/level-fees', authenticateToken, async (req: AuthRequest, res: Response) => {
+    const { fees } = req.body; // Array of { level, fee }
+    try {
+        await query('BEGIN');
+        for (const item of fees) {
+            await query(
+                'INSERT INTO level_fees (level, fee) VALUES ($1, $2) ON CONFLICT (level) DO UPDATE SET fee = $2',
+                [item.level, Number(item.fee) || 0]
+            );
+        }
+        await query('COMMIT');
+        const result = await query('SELECT level, fee FROM level_fees ORDER BY id ASC');
+        res.json(toCamel(result.rows));
+    } catch (err) {
+        await query('ROLLBACK');
+        console.error(err);
+        res.status(500).json({ message: 'Failed to save level fees' });
+    }
+});
+
+// --- Student Advancement Route ---
+
+const CLASS_LEVELS = [
+    'A1.1', 'A1.2', 'A2.1', 'A2.2',
+    'B1.1', 'B1.2', 'B2.1', 'B2.2',
+    'C1.1', 'C1.2', 'C2.1', 'C2.2'
+];
+
+app.post('/api/students/:id/advance', authenticateToken, async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    try {
+        const studentResult = await query('SELECT * FROM students WHERE id = $1', [id]);
+        if (studentResult.rows.length === 0) return res.status(404).json({ message: 'Student not found' });
+        const student = studentResult.rows[0];
+
+        const currentLevel = student.current_level || CLASS_LEVELS[0];
+        const currentIndex = CLASS_LEVELS.indexOf(currentLevel);
+        if (currentIndex === -1 || currentIndex >= CLASS_LEVELS.length - 1) {
+            return res.status(400).json({ message: 'Student is already at the highest level (C2.2)' });
+        }
+
+        const nextLevel = CLASS_LEVELS[currentIndex + 1];
+
+        // Fetch the configured fee for the next level (default 0)
+        const feeResult = await query('SELECT fee FROM level_fees WHERE level = $1', [nextLevel]);
+        const newFee = feeResult.rows.length > 0 ? Number(feeResult.rows[0].fee) : 0;
+
+        // Build advancement log entry
+        const logEntry = {
+            from: currentLevel,
+            to: nextLevel,
+            fee: newFee,
+            advancedAt: new Date().toISOString(),
+            advancedBy: req.user.username
+        };
+
+        // Append to existing log
+        const existingLog = Array.isArray(student.advancement_log) ? student.advancement_log : [];
+        const newLog = [...existingLog, logEntry];
+
+        const updated = await query(
+            'UPDATE students SET current_level=$1, fees=$2, advancement_log=$3, modified_by=$4, modified_at=CURRENT_TIMESTAMP WHERE id=$5 RETURNING *',
+            [nextLevel, newFee, JSON.stringify(newLog), req.user.id, id]
+        );
+
+        res.json(toCamel(updated.rows[0]));
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Failed to advance student' });
+    }
+});
+
 // --- Class Routes ---
 
 app.get('/api/classes', authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -1239,7 +1350,30 @@ const runMigrations = async () => {
             ADD COLUMN IF NOT EXISTS request_count INTEGER DEFAULT 0
         `);
 
+        // Level fees table
+        await query(`
+            CREATE TABLE IF NOT EXISTS level_fees (
+                id SERIAL PRIMARY KEY,
+                level TEXT NOT NULL UNIQUE,
+                fee NUMERIC NOT NULL DEFAULT 0
+            )
+        `);
+
+        // Seed default level fees (0 each) if not present
+        const levels = ['A1.1', 'A1.2', 'A2.1', 'A2.2', 'B1.1', 'B1.2', 'B2.1', 'B2.2', 'C1.1', 'C1.2', 'C2.1', 'C2.2'];
+        for (const lvl of levels) {
+            await query(
+                'INSERT INTO level_fees (level, fee) VALUES ($1, 0) ON CONFLICT (level) DO NOTHING',
+                [lvl]
+            );
+        }
+
+        // Student advancement columns
+        await query('ALTER TABLE students ADD COLUMN IF NOT EXISTS current_level TEXT');
+        await query('ALTER TABLE students ADD COLUMN IF NOT EXISTS advancement_log JSONB DEFAULT \'[]\'');
+
         console.log('✅ Auto-migrations completed successfully');
+
     } catch (err) {
         console.error('❌ Auto-migration error:', err);
         // Don't exit, might be a transient error
