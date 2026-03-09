@@ -60,6 +60,11 @@ const JWT_SECRET = process.env.JWT_SECRET || 'klc-ms-secret-key-change-me';
 app.use(cors());
 app.use(express.json());
 
+// --- Health Check (used by Railway healthcheck probe) ---
+app.get('/api/health', (_req: Request, res: Response) => {
+    res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 // Serve static files with cache busting headers
 // JavaScript and CSS files have content hashes in their filenames, so they can be cached long-term
 app.use(express.static(path.join(__dirname, '../../dist'), {
