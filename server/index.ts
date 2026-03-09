@@ -726,6 +726,37 @@ app.post('/api/payments', authenticateToken, async (req: AuthRequest, res: Respo
     }
 });
 
+app.put('/api/payments/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    const { payerName, clientId, paymentDate, amount, currency, service, paymentMethod, notes } = req.body;
+    try {
+        const result = await query(
+            `UPDATE payments SET payer_name = $1, client_id = $2, payment_date = $3, amount = $4, currency = $5,
+             service = $6, payment_method = $7, notes = $8
+             WHERE payment_id = $9 RETURNING *`,
+            [payerName, clientId, paymentDate, amount, currency, service, paymentMethod, notes, id]
+        );
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'Payment not found' });
+        }
+        res.json(toCamel(result.rows[0]));
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Failed to update payment' });
+    }
+});
+
+app.delete('/api/payments/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    try {
+        await query('DELETE FROM payments WHERE payment_id = $1', [id]);
+        res.status(204).send();
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Failed to delete payment' });
+    }
+});
+
 app.get('/api/expenditures', authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
         const result = await query('SELECT * FROM expenditures ORDER BY expenditure_date DESC');
@@ -748,6 +779,37 @@ app.post('/api/expenditures', authenticateToken, async (req: AuthRequest, res: R
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: 'Failed to add expenditure' });
+    }
+});
+
+app.put('/api/expenditures/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    const { payeeName, expenditureDate, amount, currency, description, category, paymentMethod } = req.body;
+    try {
+        const result = await query(
+            `UPDATE expenditures SET payee_name = $1, expenditure_date = $2, amount = $3, currency = $4,
+             description = $5, category = $6, payment_method = $7
+             WHERE expenditure_id = $8 RETURNING *`,
+            [payeeName, expenditureDate, amount, currency, description, category, paymentMethod, id]
+        );
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'Expenditure not found' });
+        }
+        res.json(toCamel(result.rows[0]));
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Failed to update expenditure' });
+    }
+});
+
+app.delete('/api/expenditures/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    try {
+        await query('DELETE FROM expenditures WHERE expenditure_id = $1', [id]);
+        res.status(204).send();
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Failed to delete expenditure' });
     }
 });
 
