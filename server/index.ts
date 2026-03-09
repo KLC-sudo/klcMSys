@@ -928,27 +928,176 @@ const runMigrations = async () => {
     try {
         console.log('Running database migrations...');
 
-        // 1. Add room_number to classes
-        await query('ALTER TABLE classes ADD COLUMN IF NOT EXISTS room_number TEXT');
+        // === PHASE 1: Create base tables (safe to run on any fresh DB) ===
 
-        // 2. Fix assigned_to in follow_up_actions (change from UUID to TEXT)
-        // First drop the FK constraint if it exists
-        await query('ALTER TABLE follow_up_actions DROP CONSTRAINT IF EXISTS follow_up_actions_assigned_to_fkey');
-        // Then change column type
-        await query('ALTER TABLE follow_up_actions ALTER COLUMN assigned_to TYPE TEXT');
+        await query(`
+            CREATE TABLE IF NOT EXISTS users (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                username TEXT NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                role TEXT DEFAULT 'user',
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
 
-        // 3. Ensure fees column exists in students (for balance calculation)
-        await query('ALTER TABLE students ADD COLUMN IF NOT EXISTS fees NUMERIC DEFAULT 0');
-        await query('UPDATE students SET fees = 0 WHERE fees IS NULL');
+        await query(`
+            CREATE TABLE IF NOT EXISTS prospects (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                prospect_name TEXT NOT NULL,
+                email TEXT,
+                phone TEXT,
+                contact_method TEXT NOT NULL,
+                date_of_contact DATE NOT NULL,
+                notes TEXT,
+                service_interested_in TEXT NOT NULL,
+                status TEXT DEFAULT 'Inquired',
+                training_languages TEXT[],
+                translation_source_language TEXT,
+                translation_target_language TEXT,
+                translation_completion_date DATE,
+                document_title TEXT,
+                number_of_pages INTEGER,
+                translation_rate_per_page NUMERIC,
+                translation_total_fee NUMERIC DEFAULT 0,
+                interpretation_completion_date DATE,
+                subject_of_interpretation TEXT,
+                interpretation_duration NUMERIC,
+                interpretation_duration_unit TEXT,
+                interpretation_rate NUMERIC,
+                interpretation_total_fee NUMERIC DEFAULT 0,
+                interpretation_event_date DATE,
+                created_by UUID REFERENCES users(id),
+                modified_by UUID REFERENCES users(id),
+                created_by_username TEXT,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                modified_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
 
-        // 4. Ensure fee columns exist in prospects (for balance calculation)
-        await query('ALTER TABLE prospects ADD COLUMN IF NOT EXISTS translation_total_fee NUMERIC DEFAULT 0');
-        await query('UPDATE prospects SET translation_total_fee = 0 WHERE translation_total_fee IS NULL');
+        await query(`
+            CREATE TABLE IF NOT EXISTS students (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                student_id TEXT UNIQUE NOT NULL,
+                name TEXT NOT NULL,
+                email TEXT,
+                phone TEXT,
+                registration_date DATE NOT NULL,
+                date_of_birth DATE,
+                nationality TEXT,
+                occupation TEXT,
+                address TEXT,
+                mother_tongue TEXT,
+                how_heard_about_us TEXT,
+                how_heard_about_us_other TEXT,
+                language_of_study TEXT,
+                fees NUMERIC DEFAULT 0,
+                created_by UUID REFERENCES users(id),
+                modified_by UUID REFERENCES users(id),
+                created_by_username TEXT,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                modified_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
 
-        await query('ALTER TABLE prospects ADD COLUMN IF NOT EXISTS interpretation_total_fee NUMERIC DEFAULT 0');
-        await query('UPDATE prospects SET interpretation_total_fee = 0 WHERE interpretation_total_fee IS NULL');
+        await query(`
+            CREATE TABLE IF NOT EXISTS follow_up_actions (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                prospect_id UUID REFERENCES prospects(id) ON DELETE CASCADE,
+                due_date DATE NOT NULL,
+                assigned_to TEXT,
+                notes TEXT,
+                status TEXT DEFAULT 'Pending',
+                outcome TEXT,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
 
-        // 5. Create user_sessions table for device/session management
+        await query(`
+            CREATE TABLE IF NOT EXISTS classes (
+                class_id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                language TEXT NOT NULL,
+                level TEXT NOT NULL,
+                teacher_id TEXT,
+                room_number TEXT,
+                created_by UUID REFERENCES users(id),
+                created_by_username TEXT,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        await query(`
+            CREATE TABLE IF NOT EXISTS class_schedules (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                class_id TEXT REFERENCES classes(class_id) ON DELETE CASCADE,
+                day_of_week TEXT NOT NULL,
+                start_time TIME NOT NULL,
+                end_time TIME NOT NULL
+            )
+        `);
+
+        await query(`
+            CREATE TABLE IF NOT EXISTS student_enrollments (
+                student_id UUID REFERENCES students(id) ON DELETE CASCADE,
+                class_id TEXT REFERENCES classes(class_id) ON DELETE CASCADE,
+                PRIMARY KEY (student_id, class_id)
+            )
+        `);
+
+        await query(`
+            CREATE TABLE IF NOT EXISTS payments (
+                payment_id TEXT PRIMARY KEY,
+                payer_name TEXT NOT NULL,
+                client_id UUID,
+                payment_date DATE NOT NULL,
+                amount NUMERIC NOT NULL,
+                currency TEXT NOT NULL,
+                service TEXT NOT NULL,
+                balance NUMERIC DEFAULT 0,
+                balance_currency TEXT,
+                payment_method TEXT NOT NULL,
+                notes TEXT,
+                created_by UUID REFERENCES users(id),
+                created_by_username TEXT,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        await query(`
+            CREATE TABLE IF NOT EXISTS expenditures (
+                expenditure_id TEXT PRIMARY KEY,
+                payee_name TEXT NOT NULL,
+                expenditure_date DATE NOT NULL,
+                amount NUMERIC NOT NULL,
+                currency TEXT NOT NULL,
+                description TEXT,
+                category TEXT NOT NULL,
+                payment_method TEXT NOT NULL,
+                created_by UUID REFERENCES users(id),
+                created_by_username TEXT,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        await query(`
+            CREATE TABLE IF NOT EXISTS communications (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                type TEXT NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT,
+                prospect_id UUID REFERENCES prospects(id) ON DELETE CASCADE,
+                assigned_to TEXT NOT NULL,
+                due_date DATE NOT NULL,
+                status TEXT DEFAULT 'Pending',
+                priority TEXT DEFAULT 'medium',
+                outcome TEXT,
+                created_by UUID REFERENCES users(id),
+                created_by_username TEXT,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
         await query(`
             CREATE TABLE IF NOT EXISTS user_sessions (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -959,6 +1108,11 @@ const runMigrations = async () => {
                 os TEXT,
                 ip_address TEXT,
                 user_agent TEXT,
+                browser_version TEXT,
+                os_version TEXT,
+                screen_resolution TEXT,
+                timezone TEXT,
+                request_count INTEGER DEFAULT 0,
                 is_active BOOLEAN DEFAULT true,
                 last_active TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -966,12 +1120,41 @@ const runMigrations = async () => {
                 revoked_by UUID REFERENCES users(id)
             )
         `);
+
         await query('CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions(user_id)');
         await query('CREATE INDEX IF NOT EXISTS idx_user_sessions_token ON user_sessions(session_token)');
         await query('CREATE INDEX IF NOT EXISTS idx_user_sessions_active ON user_sessions(is_active)');
-        // Add verbose device tracking columns to user_sessions
+
+        // === PHASE 2: Safe ALTER TABLE for additive column migrations ===
+
+        // Add room_number to classes (in case the table existed before)
+        await query('ALTER TABLE classes ADD COLUMN IF NOT EXISTS room_number TEXT');
+
+        // Fix assigned_to in follow_up_actions (change from UUID to TEXT if needed)
+        await query('ALTER TABLE follow_up_actions DROP CONSTRAINT IF EXISTS follow_up_actions_assigned_to_fkey');
+        await query('ALTER TABLE follow_up_actions ALTER COLUMN assigned_to TYPE TEXT USING assigned_to::TEXT');
+
+        // Ensure fees column exists in students
+        await query('ALTER TABLE students ADD COLUMN IF NOT EXISTS fees NUMERIC DEFAULT 0');
+        await query('UPDATE students SET fees = 0 WHERE fees IS NULL');
+
+        // Ensure fee columns exist in prospects
+        await query('ALTER TABLE prospects ADD COLUMN IF NOT EXISTS translation_total_fee NUMERIC DEFAULT 0');
+        await query('UPDATE prospects SET translation_total_fee = 0 WHERE translation_total_fee IS NULL');
+        await query('ALTER TABLE prospects ADD COLUMN IF NOT EXISTS interpretation_total_fee NUMERIC DEFAULT 0');
+        await query('UPDATE prospects SET interpretation_total_fee = 0 WHERE interpretation_total_fee IS NULL');
+
+        // Ensure created_by_username columns exist (for audit trail display)
+        await query('ALTER TABLE prospects ADD COLUMN IF NOT EXISTS created_by_username TEXT');
+        await query('ALTER TABLE students ADD COLUMN IF NOT EXISTS created_by_username TEXT');
+        await query('ALTER TABLE classes ADD COLUMN IF NOT EXISTS created_by_username TEXT');
+        await query('ALTER TABLE payments ADD COLUMN IF NOT EXISTS created_by_username TEXT');
+        await query('ALTER TABLE expenditures ADD COLUMN IF NOT EXISTS created_by_username TEXT');
+        await query('ALTER TABLE communications ADD COLUMN IF NOT EXISTS created_by_username TEXT');
+
+        // Ensure user_sessions verbose columns exist (for older installs)
         await query(`
-            ALTER TABLE user_sessions 
+            ALTER TABLE user_sessions
             ADD COLUMN IF NOT EXISTS browser_version TEXT,
             ADD COLUMN IF NOT EXISTS os_version TEXT,
             ADD COLUMN IF NOT EXISTS screen_resolution TEXT,
