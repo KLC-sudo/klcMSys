@@ -458,12 +458,22 @@ app.get('/api/prospects', authenticateToken, async (req: AuthRequest, res: Respo
 app.post('/api/prospects', authenticateToken, async (req: AuthRequest, res: Response) => {
     const {
         prospectName, email, phone, contactMethod, dateOfContact, notes, serviceInterestedIn,
-        trainingLanguages, translationSourceLanguage, translationTargetLanguage
+        trainingLanguages, translationSourceLanguage, translationTargetLanguage, createdByUsername
     } = req.body;
     try {
         const result = await query(
-            'INSERT INTO prospects (prospect_name, email, phone, contact_method, date_of_contact, notes, service_interested_in, training_languages, translation_source_language, translation_target_language, translation_total_fee, interpretation_total_fee, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *',
-            [prospectName, email, phone, contactMethod, dateOfContact, notes, serviceInterestedIn, trainingLanguages, translationSourceLanguage, translationTargetLanguage, req.body.translationTotalFee || 0, req.body.interpretationTotalFee || 0, req.user.id]
+            `INSERT INTO prospects (
+                prospect_name, email, phone, contact_method, date_of_contact, notes, service_interested_in,
+                training_languages, translation_source_language, translation_target_language,
+                translation_total_fee, interpretation_total_fee,
+                created_by, created_by_username
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
+            [
+                prospectName, email, phone, contactMethod, dateOfContact, notes, serviceInterestedIn,
+                trainingLanguages, translationSourceLanguage, translationTargetLanguage,
+                req.body.translationTotalFee || 0, req.body.interpretationTotalFee || 0,
+                req.user.id, createdByUsername || null
+            ]
         );
         res.status(201).json(toCamel(result.rows[0]));
     } catch (err) {

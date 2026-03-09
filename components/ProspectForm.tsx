@@ -9,6 +9,7 @@ import InterpretationFields from './prospect/InterpretationFields';
 import { useFormValidation } from '../hooks/useFormValidation';
 import { prospectFormSchema } from '../validation/prospectSchema';
 import { formatDateForInput, getTodayDate } from '../utils/dateUtils';
+import CreatorAutocomplete from './shared/CreatorAutocomplete';
 
 interface ProspectFormProps {
     onSubmit: (prospect: ProspectFormData) => void;
@@ -32,6 +33,7 @@ const ProspectForm: React.FC<ProspectFormProps> = ({ onSubmit, initialData, onCa
         translationTargetLanguage: '',
         interpretationSourceLanguage: '',
         interpretationTargetLanguage: '',
+        createdByUsername: '',
     };
 
     const [formData, setFormData] = useState<ProspectFormData>(initialFormState);
@@ -61,6 +63,7 @@ const ProspectForm: React.FC<ProspectFormProps> = ({ onSubmit, initialData, onCa
                 interpretationTargetLanguage: interpretationTargetLanguage || '',
                 translationTotalFee: initialData.translationTotalFee || 0,
                 interpretationTotalFee: initialData.interpretationTotalFee || 0,
+                createdByUsername: (initialData as any).createdByUsername || '',
             };
 
             if (serviceInterestedIn === ServiceType.LanguageTraining && trainingLanguages) {
@@ -109,6 +112,7 @@ const ProspectForm: React.FC<ProspectFormProps> = ({ onSubmit, initialData, onCa
             dateOfContact: formData.dateOfContact,
             notes: formData.notes,
             serviceInterestedIn: formData.serviceInterestedIn,
+            createdByUsername: formData.createdByUsername || '',
         };
 
         switch (formData.serviceInterestedIn) {
@@ -294,6 +298,15 @@ const ProspectForm: React.FC<ProspectFormProps> = ({ onSubmit, initialData, onCa
                     </div>
                 )}
             </div>
+
+            {/* Entered By */}
+            <CreatorAutocomplete
+                value={formData.createdByUsername || ''}
+                onChange={(value) => setFormData(prev => ({ ...prev, createdByUsername: value }))}
+                label="Entered By"
+                placeholder="Name of person entering this record..."
+                required={!isEditing}
+            />
 
             {/* Notes */}
             <TextAreaField

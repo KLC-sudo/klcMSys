@@ -103,12 +103,11 @@ const ProspectsTable: React.FC<ProspectsTableProps> = ({
             header: 'Created By',
             accessor: 'createdByUsername' as keyof Prospect,
             render: (_: any, row: Prospect) => (
-                <div className="text-xs">
-                    <div className="font-medium">{row.createdByUsername}</div>
-                    {row.createdAt && (
-                        <div className="text-slate-500">
-                            {new Date(row.createdAt).toLocaleDateString()}
-                        </div>
+                <div className="text-sm">
+                    {row.createdByUsername ? (
+                        <span className="font-medium text-slate-700">{row.createdByUsername}</span>
+                    ) : (
+                        <span className="text-slate-400 italic text-xs">—</span>
                     )}
                 </div>
             ),

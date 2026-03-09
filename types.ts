@@ -316,6 +316,7 @@ export interface ProspectFormData {
 
   // Creator tracking
   createdBy?: string;
+  createdByUsername?: string; // Display name of whoever entered the prospect
 }
 
 export interface StudentFormData {
