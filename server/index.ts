@@ -833,12 +833,14 @@ app.get('/api/payments', authenticateToken, async (req: AuthRequest, res: Respon
 });
 
 app.post('/api/payments', authenticateToken, async (req: AuthRequest, res: Response) => {
-    const { payerName, clientId, paymentDate, amount, currency, service, paymentMethod, notes } = req.body;
+    const { payerName, clientId, paymentDate, amount, currency, service, paymentMethod, notes, recordedBy } = req.body;
     const paymentId = `PAY-${Date.now()}`;
+    // Use the manually-entered name if provided, otherwise fall back to the login account name
+    const createdByUsername = (recordedBy && String(recordedBy).trim()) ? String(recordedBy).trim() : req.user.username;
     try {
         const result = await query(
             'INSERT INTO payments (payment_id, payer_name, client_id, payment_date, amount, currency, service, payment_method, notes, created_by, created_by_username) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *',
-            [paymentId, payerName, clientId, paymentDate, amount, currency, service, paymentMethod, notes, req.user.id, req.user.username]
+            [paymentId, payerName, clientId, paymentDate, amount, currency, service, paymentMethod, notes, req.user.id, createdByUsername]
         );
         res.status(201).json(toCamel(result.rows[0]));
     } catch (err) {
@@ -889,12 +891,14 @@ app.get('/api/expenditures', authenticateToken, async (req: AuthRequest, res: Re
 });
 
 app.post('/api/expenditures', authenticateToken, async (req: AuthRequest, res: Response) => {
-    const { payeeName, expenditureDate, amount, currency, description, category, paymentMethod } = req.body;
+    const { payeeName, expenditureDate, amount, currency, description, category, paymentMethod, recordedBy } = req.body;
     const expenditureId = `EXP-${Date.now()}`;
+    // Use the manually-entered name if provided, otherwise fall back to the login account name
+    const createdByUsername = (recordedBy && String(recordedBy).trim()) ? String(recordedBy).trim() : req.user.username;
     try {
         const result = await query(
             'INSERT INTO expenditures (expenditure_id, payee_name, expenditure_date, amount, currency, description, category, payment_method, created_by, created_by_username) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *',
-            [expenditureId, payeeName, expenditureDate, amount, currency, description, category, paymentMethod, req.user.id, req.user.username]
+            [expenditureId, payeeName, expenditureDate, amount, currency, description, category, paymentMethod, req.user.id, createdByUsername]
         );
         res.status(201).json(toCamel(result.rows[0]));
     } catch (err) {
@@ -902,6 +906,7 @@ app.post('/api/expenditures', authenticateToken, async (req: AuthRequest, res: R
         res.status(500).json({ message: 'Failed to add expenditure' });
     }
 });
+
 
 app.put('/api/expenditures/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
