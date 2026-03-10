@@ -837,8 +837,8 @@ app.post('/api/payments', authenticateToken, async (req: AuthRequest, res: Respo
     const paymentId = `PAY-${Date.now()}`;
     try {
         const result = await query(
-            'INSERT INTO payments (payment_id, payer_name, client_id, payment_date, amount, currency, service, payment_method, notes, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *',
-            [paymentId, payerName, clientId, paymentDate, amount, currency, service, paymentMethod, notes, req.user.id]
+            'INSERT INTO payments (payment_id, payer_name, client_id, payment_date, amount, currency, service, payment_method, notes, created_by, created_by_username) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *',
+            [paymentId, payerName, clientId, paymentDate, amount, currency, service, paymentMethod, notes, req.user.id, req.user.username]
         );
         res.status(201).json(toCamel(result.rows[0]));
     } catch (err) {
@@ -893,8 +893,8 @@ app.post('/api/expenditures', authenticateToken, async (req: AuthRequest, res: R
     const expenditureId = `EXP-${Date.now()}`;
     try {
         const result = await query(
-            'INSERT INTO expenditures (expenditure_id, payee_name, expenditure_date, amount, currency, description, category, payment_method, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *',
-            [expenditureId, payeeName, expenditureDate, amount, currency, description, category, paymentMethod, req.user.id]
+            'INSERT INTO expenditures (expenditure_id, payee_name, expenditure_date, amount, currency, description, category, payment_method, created_by, created_by_username) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *',
+            [expenditureId, payeeName, expenditureDate, amount, currency, description, category, paymentMethod, req.user.id, req.user.username]
         );
         res.status(201).json(toCamel(result.rows[0]));
     } catch (err) {
