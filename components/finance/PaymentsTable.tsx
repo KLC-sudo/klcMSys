@@ -16,7 +16,10 @@ const PaymentsTable: React.FC<PaymentsTableProps> = ({ payments, onEdit, onDelet
         {
             header: 'Date',
             accessor: 'paymentDate' as keyof Payment,
-            render: (value: string) => new Date(value).toLocaleDateString(),
+            render: (value: string) => {
+                const d = new Date(value.includes('T') ? value : `${value}T00:00:00`);
+                return d.toLocaleDateString();
+            },
             sortable: true,
             width: '12%',
         },

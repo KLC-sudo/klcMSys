@@ -15,7 +15,13 @@ const ExpendituresTable: React.FC<ExpendituresTableProps> = ({ expenditures, onE
         {
             header: 'Date',
             accessor: 'expenditureDate' as keyof Expenditure,
-            render: (value: string) => new Date(value).toLocaleDateString(),
+            render: (value: string) => {
+                // Append T00:00:00 to force local-time parsing.
+                // Plain "YYYY-MM-DD" is parsed as UTC by JS, causing a day shift
+                // on computers west of UTC. This keeps the user's entered date.
+                const d = new Date(value.includes('T') ? value : `${value}T00:00:00`);
+                return d.toLocaleDateString();
+            },
             sortable: true,
             width: '12%',
         },
